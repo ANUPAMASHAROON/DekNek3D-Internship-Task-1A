@@ -1,62 +1,6 @@
-// "use client";
-
-// import * as THREE from "three";
-// import { GLTFLoader } from "three-stdlib";
-
-// export const loadGLBFile = async (
-//   file: File,
-//   onLoaded: (scene: THREE.Group) => void,
-//   onError?: (error: unknown) => void
-// ) => {
-//   try {
-//     // Validate file type
-//     if (!file.name.toLowerCase().endsWith(".glb")) {
-//       throw new Error("Only GLB files are supported");
-//     }
-
-//     // Convert GLB file to ArrayBuffer
-//     const buffer = await file.arrayBuffer();
-
-//     // Initialize GLTF loader
-//     const loader = new GLTFLoader();
-
-//     // Parse GLB data
-//     loader.parse(
-//       buffer,
-//       "",
-//       (gltf) => {
-//         if (!gltf.scene) {
-//           throw new Error("Invalid GLB file");
-//         }
-//         onLoaded(gltf.scene);
-//       },
-//       (error) => {
-//         console.error("GLTF parse error:", error);
-//         if (onError) onError(error);
-//       }
-//     );
-//   } catch (err) {
-//     console.error("GLB loading failed:", err);
-//     if (onError) onError(err);
-//   }
-// };
-
-// /**
-//  * Placeholder component
-//  */
-// export default function Page() {
-//   return (
-//     <div style={{ padding: "20px" }}>
-//       <h3>GLB Loading Logic Module</h3>
-//     </div>
-//   );
-// }
-
 "use client";
 
 import { useState, DragEvent, ChangeEvent } from "react";
-import * as THREE from "three";
-import { GLTFLoader } from "three-stdlib";
 import {
   UploadCloud,
   File as FileIcon,
@@ -65,62 +9,22 @@ import {
   XCircle,
 } from "lucide-react";
 
-/* =======================
-   GLB LOADING LOGIC
-======================= */
-async function loadGLBFile(
-  file: File,
-  onLoaded: (scene: THREE.Group) => void,
-  onError?: (error: unknown) => void
-) {
-  try {
-    if (!file.name.toLowerCase().endsWith(".glb")) {
-      throw new Error("Only GLB files are supported");
-    }
+const BACKEND_UPLOAD_URL = "http://localhost:8000/upload";
 
-    const buffer = await file.arrayBuffer();
-    const loader = new GLTFLoader();
-
-    loader.parse(
-      buffer,
-      "",
-      (gltf) => {
-        if (!gltf.scene) {
-          throw new Error("Invalid GLB file");
-        }
-        console.log("GLB Scene loaded:", gltf.scene);
-        onLoaded(gltf.scene);
-      },
-      (error) => {
-        console.error("GLTF parse error:", error);
-        onError?.(error);
-      }
-    );
-  } catch (err) {
-    console.error("GLB loading failed:", err);
-    onError?.(err);
-  }
-}
-
-/* =======================
-   MAIN PAGE COMPONENT
-======================= */
 export default function Page() {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [format, setFormat] = useState("STL (Stereolithography)");
+  const [format, setFormat] = useState("stl");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const formats = [
-    "STL (Stereolithography)",
-    "OBJ (Wavefront)",
-    "FBX (FilmBox)",
-    "PLY (Polygon File Format)",
-    "3MF (3D Manufacturing Format)",
-    "ZIP (Archive)",
-    "USDZ (Universal Scene Description)",
+    { label: "STL (Stereolithography)", value: "stl" },
+    { label: "OBJ (Wavefront)", value: "obj" },
+    { label: "PLY (Polygon File Format)", value: "ply" },
+    { label: "3MF (3D Manufacturing Format)", value: "3mf" },
   ];
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -153,62 +57,46 @@ export default function Page() {
     setDone(false);
     setLoading(false);
     setError(null);
+    setDownloadUrl(null);
   };
 
   const handleConvert = async () => {
-  if (!file) return;
-
-  setLoading(true);
-  setError(null);
-  setDone(false);
-
-  try {
-    const formData = new FormData();
-    formData.append("file", file);     // MUST be "file"
-    formData.append("format", "stl");  // backend expects this
-
-    const res = await fetch("http://localhost:8000/upload", {
-      method: "POST",
-      body: formData,
-      // ❌ DO NOT set headers
-    });
-
-    if (!res.ok) {
-      throw new Error("Upload failed");
-    }
-
-    const data = await res.json();
-    console.log("Backend response:", data);
-
-    if (!data.downloadUrl) {
-      throw new Error("No download URL returned");
-    }
-
-    // Trigger real download from backend
-    window.location.href = `http://localhost:8000${data.downloadUrl}`;
-
-    setDone(true);
-  } catch (err) {
-    console.error(err);
-    setError("Conversion failed");
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-  const handleDownload = () => {
     if (!file) return;
-    // Mock download: same file
-    const url = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name.replace(".glb", `.${format.split(" ")[0].toLowerCase()}`);
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
-  const formatShort = format.split(" ")[0];
+    setLoading(true);
+    setError(null);
+    setDone(false);
+    setDownloadUrl(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("document", file); 
+      formData.append("format", format);
+
+      const res = await fetch(BACKEND_UPLOAD_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const data = await res.json();
+
+      if (!data.downloadUrl) {
+        throw new Error("No download URL returned");
+      }
+
+      setDownloadUrl(data.downloadUrl);
+      setDone(true);
+    } catch (err) {
+      console.error(err);
+      setError("Conversion failed. Is backend running?");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-zinc-950 flex items-center justify-center px-4 py-16">
@@ -225,7 +113,6 @@ export default function Page() {
 
         <div className="grid md:grid-cols-2 gap-8">
 
-          {/* Upload Section */}
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold text-white/90">
               1. Upload GLB File
@@ -264,12 +151,9 @@ export default function Page() {
               )}
             </div>
 
-            {error && (
-              <p className="text-red-400">{error}</p>
-            )}
+            {error && <p className="text-red-400">{error}</p>}
           </div>
 
-          {/* Convert Section */}
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold text-white/90">
               2. Convert
@@ -281,7 +165,9 @@ export default function Page() {
               className="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-white"
             >
               {formats.map((f) => (
-                <option key={f}>{f}</option>
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
               ))}
             </select>
 
@@ -298,18 +184,19 @@ export default function Page() {
               ) : done ? (
                 "Conversion Complete"
               ) : (
-                `Convert to ${formatShort}`
+                `Convert to ${format.toUpperCase()}`
               )}
             </button>
 
-            {done && (
-              <button
-                onClick={handleDownload}
+            {done && downloadUrl && (
+              <a
+                href={downloadUrl}
+                download
                 className="w-full py-3 rounded-xl bg-lime-500 text-black flex justify-center gap-2"
               >
                 <Download />
                 Download File
-              </button>
+              </a>
             )}
           </div>
 
@@ -318,3 +205,4 @@ export default function Page() {
     </main>
   );
 }
+
